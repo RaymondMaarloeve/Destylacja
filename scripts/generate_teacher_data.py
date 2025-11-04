@@ -93,6 +93,11 @@ class NPCDataGenerator:
     @torch.no_grad()
     def generate_response(self, prompt: str) -> str:
         """Generuje odpowiedź od modelu nauczyciela z wysoką temperaturą."""
+        self.model.generation_config.pad_token_id = self.model.generation_config.eos_token_id
+        print("bos_token_id:", self.model.generation_config.bos_token_id)
+        print("eos_token_id:", self.model.generation_config.eos_token_id)
+        print("pad_token_id:", self.model.generation_config.pad_token_id)
+        print("vocab_size:", self.model.config.vocab_size)
         # Prompty z Excel mogą być długie - zwiększamy max_length
         inputs = self.tokenizer(
             prompt,
