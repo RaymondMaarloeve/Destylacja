@@ -74,7 +74,7 @@ echo -e "${GREEN}✓ Destylacja zakończona${NC}\n"
 
 echo -e "${BLUE}[3/3] Ewaluacja modelu...${NC}"
 python scripts/evaluate_model.py \
-    --student_path ../../data/llama3_11b_to_3b_npc \
+    --student_path models/llama3_11b_to_3b_npc \
     --config config_llama3_70b_3b.yaml \
     --teacher_name meta-llama/Llama-3.2-11B-Vision-Instruct \
     --mode compare
@@ -84,17 +84,17 @@ echo "=========================================="
 echo -e "${GREEN}🏆 DESTYLACJA ZAKOŃCZONA! 🏆${NC}"
 echo "=========================================="
 echo ""
-echo "Model: ../../data/llama3_11b_to_3b_npc/"
-echo "Dataset: ../../data/teacher_dataset.jsonl"
+echo "📁 Pliki:"
+echo "   Model: models/llama3_11b_to_3b_npc/"
+echo "   Dataset: data/teacher_dataset.jsonl"
 echo ""
-echo "Następne kroki:"
+echo "🎮 Następne kroki:"
 echo "  1. Test interaktywny:"
 echo "     python scripts/evaluate_model.py \\"
-echo "       --student_path ../../data/llama3_11b_to_3b_npc \\"
+echo "       --student_path models/llama3_11b_to_3b_npc \\"
 echo "       --config config_llama3_70b_3b.yaml \\"
 echo "       --mode interactive"
 echo ""
 echo "  2. Spakuj model:"
-echo "     cd ../../data"
-echo "     tar -czf llama3_npc_model.tar.gz llama3_11b_to_3b_npc/"
+echo "     tar -czf llama3_npc_model.tar.gz models/llama3_11b_to_3b_npc/"
 echo ""

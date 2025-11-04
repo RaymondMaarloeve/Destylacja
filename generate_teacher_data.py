@@ -143,9 +143,16 @@ class NPCDataGenerator:
         
         return generated_text.strip()
     
-    def generate_dataset(self, output_path: str = "data/teacher_dataset.jsonl"):
+    def generate_dataset(self, output_path: str = None):
         """Generuje kompletny dataset treningowy z promptów Excel."""
-        output_path = Path(output_path)
+        # Użyj ścieżki z configu jeśli nie podano jawnie
+        if output_path is None:
+            output_dir = self.data_config.get('output_dir', 'data')
+            output_file = self.data_config.get('output_file', 'teacher_dataset.jsonl')
+            output_path = Path(output_dir) / output_file
+        else:
+            output_path = Path(output_path)
+            
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         num_samples = min(self.data_config['num_samples'], len(self.prompts))
