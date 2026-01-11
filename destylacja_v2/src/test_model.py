@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
-Test wytrenowanego modelu studenta
+Trained Student Model Testing
+
+Provides utilities for loading and evaluating distilled student models.
+Supports both full models and LoRA adapters, with interactive testing mode
+and batch evaluation capabilities for quality assessment.
 """
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -8,7 +12,22 @@ from peft import PeftModel
 import argparse
 
 def load_model(model_path, base_model=None):
-    """Ładuje wytrenowany model"""
+    """Loads the trained model.
+    
+    Automatically detects whether the model is a full fine-tuned model or a LoRA
+    adapter and loads it appropriately. Falls back to loading as LoRA adapter with
+    a base model if direct loading fails.
+    
+    Args:
+        model_path (str): Path to the trained model or LoRA adapter.
+        base_model (str, optional): Base model name for LoRA adapters.
+            Defaults to "meta-llama/Llama-3.2-3B-Instruct" if None.
+    
+    Returns:
+        tuple: A tuple containing:
+            - model: The loaded model ready for inference.
+            - tokenizer: The corresponding tokenizer.
+    """
     print(f"Ładowanie modelu z: {model_path}")
     
     # Jeśli to model LoRA, trzeba załadować base + adapter
@@ -38,7 +57,22 @@ def load_model(model_path, base_model=None):
     return model, tokenizer
 
 def generate_response(model, tokenizer, prompt, max_tokens=512, temperature=0.7):
-    """Generuje odpowiedź"""
+    """Generates a response to the given prompt.
+    
+    Applies chat template formatting and uses sampling-based generation with
+    temperature control and repetition penalty for natural, diverse outputs.
+    All generation happens with gradient computation disabled for efficiency.
+    
+    Args:
+        model: The model to use for generation.
+        tokenizer: The tokenizer for the model.
+        prompt (str): The input prompt/question.
+        max_tokens (int): Maximum number of tokens to generate. Defaults to 512.
+        temperature (float): Sampling temperature for generation. Defaults to 0.7.
+    
+    Returns:
+        str: The generated response text.
+    """
     messages = [{"role": "user", "content": prompt}]
     
     input_text = tokenizer.apply_chat_template(
@@ -66,7 +100,16 @@ def generate_response(model, tokenizer, prompt, max_tokens=512, temperature=0.7)
     return response
 
 def interactive_mode(model, tokenizer):
-    """Tryb interaktywny"""
+    """Runs interactive testing mode.
+    
+    Starts a conversational loop where users can input prompts and receive
+    model responses in real-time. Useful for manual quality assessment and
+    exploratory testing of the distilled model's capabilities.
+    
+    Args:
+        model: The model to use for generation.
+        tokenizer: The tokenizer for the model.
+    """
     print("\n" + "="*60)
     print("TRYB INTERAKTYWNY")
     print("="*60)
@@ -93,7 +136,16 @@ def interactive_mode(model, tokenizer):
             print(f"\nBłąd: {e}")
 
 def test_examples(model, tokenizer):
-    """Testuje przykładowe prompty"""
+    """Tests the model with sample prompts.
+    
+    Evaluates the model on a predefined set of example prompts to assess
+    its response quality and consistency. Provides a quick sanity check
+    for model behavior after training or during development.
+    
+    Args:
+        model: The model to test.
+        tokenizer: The tokenizer for the model.
+    """
     examples = [
         "Hello how are you?",
         "What happened to you?",
@@ -130,20 +182,16 @@ def main():
     
     args = parser.parse_args()
     
-    # Załaduj model
     model, tokenizer = load_model(args.model_path, args.base_model)
     
     if args.prompt:
-        # Pojedynczy prompt
         print(f"\nPrompt: {args.prompt}")
         print("\nOdpowiedź:")
         response = generate_response(model, tokenizer, args.prompt)
         print(response)
     elif args.interactive:
-        # Tryb interaktywny
         interactive_mode(model, tokenizer)
     else:
-        # Testuj przykłady
         test_examples(model, tokenizer)
 
 if __name__ == "__main__":

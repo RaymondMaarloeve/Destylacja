@@ -1,12 +1,26 @@
 #!/usr/bin/env python3
 """
-Sprawdza system i dostępne zasoby dla destylacji modeli
+System and Resource Checker for Model Distillation
+
+Validates CUDA availability, GPU specifications, and required Python libraries.
+Provides VRAM usage estimates and configuration recommendations for optimal
+distillation pipeline execution across different hardware setups.
 """
 import sys
 import json
 
 def check_cuda():
-    """Sprawdza CUDA i GPU"""
+    """Checks CUDA and GPU availability.
+    
+    Verifies PyTorch installation, CUDA availability, and enumerates all available GPUs
+    with their specifications including VRAM capacity and compute capability. Reports
+    current memory usage and available VRAM on the primary GPU for planning purposes.
+    
+    Returns:
+        tuple: A tuple containing:
+            - has_cuda (bool): True if CUDA is available and functional.
+            - vram_total (float): Total VRAM in GB on primary GPU, or 0 if unavailable.
+    """
     try:
         import torch
         print(f"✓ PyTorch zainstalowany: {torch.__version__}")
@@ -44,7 +58,18 @@ def check_cuda():
         return False, 0
 
 def check_libraries():
-    """Sprawdza wymagane biblioteki"""
+    """Checks required libraries.
+    
+    Validates the presence and versions of essential Python packages needed for
+    the distillation pipeline including transformers, quantization tools, and training
+    frameworks. Reports installation status for each library and identifies missing
+    dependencies.
+    
+    Returns:
+        tuple: A tuple containing:
+            - all_present (bool): True if all required libraries are installed.
+            - missing (list): List of missing library names, empty if all present.
+    """
     libs = {
         'transformers': 'transformers',
         'bitsandbytes': 'bitsandbytes',
@@ -67,7 +92,13 @@ def check_libraries():
     return len(missing) == 0, missing
 
 def estimate_vram_requirements():
-    """Szacuje wymagania VRAM"""
+    """Estimates VRAM requirements for distillation.
+    
+    Provides detailed memory usage estimates for different model configurations
+    across inference and training modes. Includes recommendations for optimal
+    pipeline execution based on common hardware configurations and suggests
+    sequential vs parallel processing strategies.
+    """
     print("\n" + "="*60)
     print("SZACOWANE WYMAGANIA VRAM:")
     print("="*60)
@@ -105,6 +136,15 @@ def estimate_vram_requirements():
     print("  Status: ⚠️  Na granicy - lepiej osobno")
 
 def main():
+    """Main entry point for system validation.
+    
+    Orchestrates comprehensive system checks including Python version, CUDA availability,
+    GPU specifications, library dependencies, and VRAM capacity. Provides a summary
+    report with actionable recommendations for system configuration.
+    
+    Returns:
+        bool: True if the system is ready for distillation, False if configuration needed.
+    """
     print("="*60)
     print("SPRAWDZANIE SYSTEMU DLA DESTYLACJI MODELI")
     print("="*60)

@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-Faza 1: Generowanie odpowiedzi nauczyciela (domyślnie Qwen2.5 7B 4-bit)
-Generuje odpowiedzi dla wszystkich promptów z dataset.json
+Phase 1: Teacher Response Generation (default: Qwen2.5 7B 4-bit)
+
+Generates teacher model responses for all prompts in the dataset.
+Supports both 4-bit quantized and full precision modes with aggressive memory
+management to enable processing large datasets on consumer GPUs efficiently.
 """
 import json
 import torch
@@ -17,7 +20,25 @@ torch.backends.cuda.matmul.allow_tf32 = True
 torch.set_float32_matmul_precision("high")
 
 def load_teacher_model(model_name="Qwen/Qwen2.5-7B-Instruct", load_in_4bit=True, attn_impl=None):
-    """Ładuje model nauczyciela; domyślnie 4-bit, opcjonalnie bf16, z wyborem impl. attention."""
+    """Loads the teacher model.
+    
+    Initializes the teacher model with configurable precision and attention implementation.
+    Defaults to 4-bit quantization for memory efficiency, with optional full bf16 precision
+    for faster inference on high-end GPUs. Forces full model placement on GPU 0 to avoid
+    CPU offloading and maximize throughput.
+    
+    Args:
+        model_name (str): Name or path of the teacher model.
+            Defaults to "Qwen/Qwen2.5-7B-Instruct".
+        load_in_4bit (bool): Whether to use 4-bit quantization. Defaults to True.
+        attn_impl (str, optional): Attention implementation to use (e.g., "flash_attention_2").
+            If None, uses default implementation.
+    
+    Returns:
+        tuple: A tuple containing:
+            - model: The loaded teacher model in evaluation mode.
+            - tokenizer: The corresponding tokenizer.
+    """
     print(f"\n{'='*60}")
     print(f"ŁADOWANIE MODELU NAUCZYCIELA: {model_name}")
     print(f"{'='*60}")
@@ -57,7 +78,6 @@ def load_teacher_model(model_name="Qwen/Qwen2.5-7B-Instruct", load_in_4bit=True,
     
     model.eval()
     
-    # Sprawdź VRAM
     if torch.cuda.is_available():
         allocated = torch.cuda.memory_allocated(0) / (1024**3)
         reserved = torch.cuda.memory_reserved(0) / (1024**3)
@@ -68,7 +88,25 @@ def load_teacher_model(model_name="Qwen/Qwen2.5-7B-Instruct", load_in_4bit=True,
     return model, tokenizer
 
 def generate_response(model, tokenizer, prompt, max_new_tokens=512, temperature=0.7):
-    """Generuje odpowiedź dla pojedynczego prompta"""
+    """Generates a response for a single prompt.
+    
+    Uses greedy decoding with KV-cache for fast inference and applies aggressive memory
+    cleanup after each generation to prevent memory fragmentation during batch processing.
+    All intermediate tensors are explicitly deleted and CUDA cache is cleared.
+    
+    Args:
+        model: The teacher model to use for generation.
+        tokenizer: The tokenizer for the model.
+        prompt (str): The input prompt to generate a response for.
+        max_new_tokens (int): Maximum number of tokens to generate. Defaults to 512.
+        temperature (float): Sampling temperature (currently unused with greedy decoding).
+            Defaults to 0.7.
+    
+    Returns:
+        tuple: A tuple containing:
+            - response (str): The generated response text.
+            - None: Placeholder for compatibility (previously used for outputs).
+    """
     
     # Format jako chat
     messages = [{"role": "user", "content": prompt}]
@@ -93,11 +131,10 @@ def generate_response(model, tokenizer, prompt, max_new_tokens=512, temperature=
             num_beams=1  # Wyłącz beam search
         )
     
-    # Dekodowanie
     generated_ids = outputs[0][inputs.input_ids.shape[1]:]
     response = tokenizer.decode(generated_ids, skip_special_tokens=True)
     
-    # KLUCZOWE: Ekstremalnie agresywne czyszczenie
+
     del messages, input_text, inputs, outputs, generated_ids
     
     # Wymuś garbage collection natychmiast
@@ -120,7 +157,29 @@ def process_dataset(
     temperature=0.7,
     max_new_tokens=512
 ):
-    """Przetwarza cały dataset"""
+    """Processes the entire dataset and generates teacher responses.
+    
+    Iterates through all prompts in the dataset, generates responses using the teacher model,
+    and saves results to a JSON file. Implements periodic memory cleanup and progress monitoring
+    with example outputs. Handles errors gracefully by recording failed prompts while continuing
+    processing.
+    
+    Args:
+        model: The teacher model to use for generation.
+        tokenizer: The tokenizer for the model.
+        dataset_path (str): Path to the input dataset JSON file.
+            Defaults to "../dataset.json".
+        output_path (str): Path to save the generated responses.
+            Defaults to "../teacher_responses.json".
+        max_samples (int, optional): Limit the number of samples to process (for testing).
+            If None, processes all samples.
+        temperature (float): Sampling temperature for generation. Defaults to 0.7.
+        max_new_tokens (int): Maximum number of tokens to generate per response.
+            Defaults to 512.
+    
+    Returns:
+        list: List of result dictionaries containing prompts, responses, and metadata.
+    """
     
     print(f"\n{'='*60}")
     print(f"GENEROWANIE ODPOWIEDZI NAUCZYCIELA")
@@ -233,7 +292,7 @@ def process_dataset(
     print(f"Całkowity czas: {timedelta(seconds=int(total_time))}")
     print(f"Średni czas na prompt: {total_time/len(dataset):.2f}s")
     
-    # Zapisz wyniki
+
     print(f"\nZapisywanie do: {output_path}")
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
@@ -243,6 +302,14 @@ def process_dataset(
     return results
 
 def main():
+    """Main entry point for teacher response generation.
+    
+    Parses command-line arguments, validates CUDA availability, loads the teacher model,
+    and processes the dataset to generate responses for distillation training.
+    
+    Returns:
+        int: Exit code (0 for success, 1 for failure).
+    """
     parser = argparse.ArgumentParser(description="Generowanie odpowiedzi nauczyciela")
     parser.add_argument("--dataset", default="../dataset.json", help="Ścieżka do datasetu")
     parser.add_argument("--output", default="../teacher_responses.json", help="Ścieżka do outputu")
@@ -255,7 +322,6 @@ def main():
     
     args = parser.parse_args()
     
-    # Sprawdź CUDA
     if not torch.cuda.is_available():
         print("✗ CUDA niedostępna! Ten skrypt wymaga GPU.")
         return 1
@@ -263,14 +329,12 @@ def main():
     print(f"GPU: {torch.cuda.get_device_name(0)}")
     print(f"VRAM: {torch.cuda.get_device_properties(0).total_memory / (1024**3):.1f} GB")
     
-    # Załaduj model
     model, tokenizer = load_teacher_model(
         args.model,
         load_in_4bit=not args.no_4bit,
         attn_impl=args.attn_impl
     )
     
-    # Przetwórz dataset
     results = process_dataset(
         model,
         tokenizer,

@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
-Faza 2: Trening studenta (Llama 3.2 3B) przez destylację
-Fine-tuning z odpowiedzi nauczyciela używając LoRA i supervised learning
+Phase 2: Student Training (Llama 3.2 3B) via Distillation
+
+Fine-tuning with teacher responses using LoRA and supervised learning.
+This script trains a smaller student model to mimic the behavior of a larger 
+teacher model by learning from its generated responses, enabling efficient 
+knowledge transfer while maintaining model quality.
 """
 import json
 import torch
@@ -21,7 +25,22 @@ import argparse
 import os
 
 def load_student_model(model_name="meta-llama/Llama-3.2-3B-Instruct", use_lora=True):
-    """Ładuje model studenta z opcjonalnym LoRA"""
+    """Loads the student model with optional LoRA.
+    
+    Initializes the base student model with efficient memory usage via fp16 precision
+    and applies LoRA adapters for parameter-efficient fine-tuning. Configures gradient
+    checkpointing and monitors VRAM usage to optimize training on limited hardware.
+    
+    Args:
+        model_name (str): Name or path of the base student model. 
+            Defaults to "meta-llama/Llama-3.2-3B-Instruct".
+        use_lora (bool): Whether to apply LoRA configuration. Defaults to True.
+    
+    Returns:
+        tuple: A tuple containing:
+            - model: The loaded (and optionally LoRA-adapted) model.
+            - tokenizer: The corresponding tokenizer.
+    """
     print(f"\n{'='*60}")
     print(f"ŁADOWANIE MODELU STUDENTA: {model_name}")
     print(f"{'='*60}")
@@ -77,7 +96,23 @@ def load_student_model(model_name="meta-llama/Llama-3.2-3B-Instruct", use_lora=T
     return model, tokenizer
 
 def prepare_training_data(teacher_responses_path, tokenizer, max_length=1024):
-    """Przygotowuje dane treningowe z odpowiedzi nauczyciela"""
+    """Prepares training data from teacher responses.
+    
+    Loads teacher-generated responses, formats them into conversational chat templates,
+    and tokenizes them for training. Automatically splits data into training and 
+    evaluation sets while filtering out any invalid responses.
+    
+    Args:
+        teacher_responses_path (str): Path to the JSON file containing teacher responses.
+        tokenizer: The tokenizer to use for processing text.
+        max_length (int): Maximum sequence length for tokenization. Defaults to 1024.
+    
+    Returns:
+        tuple: A tuple containing:
+            - train_dataset: The tokenized training dataset.
+            - eval_dataset: The tokenized evaluation dataset.
+            - formatted_data (list): List of formatted examples with prompts and responses.
+    """
     print(f"\n{'='*60}")
     print("PRZYGOTOWANIE DANYCH TRENINGOWYCH")
     print(f"{'='*60}")
@@ -151,7 +186,18 @@ def prepare_training_data(teacher_responses_path, tokenizer, max_length=1024):
     return train_dataset, eval_dataset, formatted_data
 
 class ProgressCallback:
-    """Callback do wyświetlania postępu z przykładami odpowiedzi"""
+    """Callback for displaying training progress with sample responses.
+    
+    Monitors training metrics and periodically generates sample responses to evaluate
+    the model's evolving capabilities during the distillation process. Provides real-time
+    feedback on training speed, estimated completion time, and model quality.
+    
+    Attributes:
+        model: The model being trained.
+        tokenizer: The tokenizer for the model.
+        test_prompts (list): List of test prompts for generating sample responses.
+        total_steps (int): Total number of training steps.
+    """
     def __init__(self, model, tokenizer, test_prompts, total_steps):
         self.model = model
         self.tokenizer = tokenizer
@@ -182,7 +228,7 @@ class ProgressCallback:
                 self.generate_samples()
     
     def generate_samples(self):
-        """Generuje przykładowe odpowiedzi"""
+        """Generates sample responses from the model during training."""
         print(f"\n{'─'*60}")
         print("PRZYKŁADOWE ODPOWIEDZI STUDENTA:")
         print(f"{'─'*60}")
@@ -236,7 +282,29 @@ def train_student(
     learning_rate=5e-5,
     gradient_accumulation_steps=4
 ):
-    """Trenuje model studenta"""
+    """Trains the student model using knowledge distillation.
+    
+    Executes the full training pipeline with supervised learning on teacher responses.
+    Implements gradient accumulation for effective large batch training, cosine learning
+    rate scheduling, and periodic evaluation with checkpointing to ensure optimal results.
+    
+    Args:
+        model: The student model to train.
+        tokenizer: The tokenizer for the model.
+        train_dataset: The training dataset.
+        eval_dataset: The evaluation dataset.
+        test_prompts (list): List of prompts for generating sample responses during training.
+        output_dir (str): Directory to save the trained model. 
+            Defaults to "../models/llama-3b-distilled".
+        num_epochs (int): Number of training epochs. Defaults to 3.
+        batch_size (int): Batch size per device. Defaults to 4.
+        learning_rate (float): Learning rate for training. Defaults to 5e-5.
+        gradient_accumulation_steps (int): Number of gradient accumulation steps. 
+            Defaults to 4.
+    
+    Returns:
+        Trainer: The trained Trainer object.
+    """
     print(f"\n{'='*60}")
     print("KONFIGURACJA TRENINGU")
     print(f"{'='*60}")
@@ -370,10 +438,8 @@ def main():
         max_length=args.max_length
     )
     
-    # Wybierz przykładowe prompty do testowania
     test_prompts = [d['prompt'] for d in formatted_data[:5]]
     
-    # Trenuj
     trainer = train_student(
         model,
         tokenizer,
